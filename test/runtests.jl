@@ -1,6 +1,4 @@
-using TaskHeritableStorage
-using Test
+include("../src/TaskHeritableStorage.jl")  # Load the module (overrides Task() constructor)
 
-@testset "TaskHeritableStorage.jl" begin
-    # Write your own tests here.
-end
+include("TaskHeritableStorage.jl")
+include("MultiTest.jl")  # Note that this currently modifies Test.@testset behavior
