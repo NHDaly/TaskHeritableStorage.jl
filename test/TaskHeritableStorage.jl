@@ -5,19 +5,19 @@ using Test
 using ..TaskHeritableStorage
 
 # Examples
-@async begin  # Put each test in its own Task so they don't share a task_heritable_storage
-    task_heritable_storage()[:current_testset] = 5
+fetch(@async begin  # Put each test in its own Task so they don't share a task_heritable_storage
+    @task_heritable_storage()[:current_testset] = 5
     fetch(@async begin
-        @test task_heritable_storage()[:current_testset] == 5
+        @test @task_heritable_storage()[:current_testset] == 5
     end)
-end
+end)
 
-@async begin
-    @test TaskHeritableStorage._has_task_heritable_storage() == false
-    TaskHeritableStorage.task_heritable_storage()[:x] = 1
-    @test TaskHeritableStorage._has_task_heritable_storage() == true
-    @test fetch(@async TaskHeritableStorage._has_task_heritable_storage()) == true
-end
+fetch(@async begin
+    @test TaskHeritableStorage._has_task_heritable_storage(@__MODULE__) == false
+    @task_heritable_storage()[:x] = 1
+    @test TaskHeritableStorage._has_task_heritable_storage(@__MODULE__) == true
+    @test fetch(@async TaskHeritableStorage._has_task_heritable_storage(@__MODULE__)) == true
+end)
 
 @testset "callbacks" begin
     # Dummy function that "uses concurrency" when sorting
@@ -41,8 +41,8 @@ end
     end
 
     @testset "SOLUTION: task_heritable_storage is composable" begin
-        task_heritable_storage()[:reverse] = false
-        reversed() = task_heritable_storage()[:reverse]
+        @task_heritable_storage()[:reverse] = false
+        reversed() = @task_heritable_storage()[:reverse]
 
         less_than = (a,b) -> reversed() ? a>b : a<b
         @test sort(1:10, lt=less_than) == 1:10
@@ -50,6 +50,18 @@ end
         # NOW, if the author of sort wants to parallelize it, everything is *okay*! :)
         @test psort(1:10, lt=less_than) == 1:10
     end
+end
+
+@testset "functional interface" begin
+    @test haskey(@task_heritable_storage(), :x) == false
+    @task_heritable_storage(:x, 1) do
+        # Same Task
+        @test @task_heritable_storage()[:x] == 1
+        # Nested Task
+        @test fetch(@async @task_heritable_storage()[:x]) == 1
+    end
+    # Storage removed after the function returns
+    @test haskey(@task_heritable_storage(), :x) == false
 end
 
 end
