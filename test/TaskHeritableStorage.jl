@@ -1,15 +1,22 @@
-module TaskHeritableStorageTests
+module TaskHeritableStorageTests #end
 
 using Test
 
 using ..TaskHeritableStorage
 
-# Example
-begin
+# Examples
+@async begin  # Put each test in its own Task so they don't share a task_heritable_storage
     task_heritable_storage()[:current_testset] = 5
     fetch(@async begin
         @test task_heritable_storage()[:current_testset] == 5
     end)
+end
+
+@async begin
+    @test TaskHeritableStorage._has_task_heritable_storage() == false
+    TaskHeritableStorage.task_heritable_storage()[:x] = 1
+    @test TaskHeritableStorage._has_task_heritable_storage() == true
+    @test fetch(@async TaskHeritableStorage._has_task_heritable_storage()) == true
 end
 
 @testset "callbacks" begin
@@ -27,7 +34,10 @@ end
         @test sort(1:10, lt=less_than) == 1:10
 
         # SURPRISE: the author of sort decides to parallelize it (represented via `psort`)!
-        @test_throws KeyError(:reverse) psort(1:10, lt=less_than) == 1:10
+        @test_throws TaskFailedException psort(1:10, lt=less_than) == 1:10
+        # The error is a KeyError, because :reverse is no longer in the task_local_storage:
+        e = try                          psort(1:10, lt=less_than) == 1:10; catch e; e end
+        @test e.task.exception == KeyError(:reverse)
     end
 
     @testset "SOLUTION: task_heritable_storage is composable" begin
