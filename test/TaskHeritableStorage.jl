@@ -52,4 +52,16 @@ end)
     end
 end
 
+@testset "functional interface" begin
+    @test haskey(@task_heritable_storage(), :x) == false
+    @task_heritable_storage(:x, 1) do
+        # Same Task
+        @test @task_heritable_storage()[:x] == 1
+        # Nested Task
+        @test fetch(@async @task_heritable_storage()[:x]) == 1
+    end
+    # Storage removed after the function returns
+    @test haskey(@task_heritable_storage(), :x) == false
+end
+
 end
