@@ -16,12 +16,14 @@ import Test
     # that by adding a lock around setters. A nicer fix would be to use a lock-free accumulator.
 
     function get_current_testsets()
-        # If not present in task_local_storage, _copy_ the array from parent Task:
-        testsets = copy(get(@task_heritable_storage(), :__BASETESTNEXT__, AbstractTestSet[]))
-        # Write over the testsets array in THS with our copy, so we can't update parent
-        # This copying serves to fork the parent's array to a new copy within child tasks.
-        @task_heritable_storage()[:__BASETESTNEXT__] = testsets
-        testsets
+        # Get the stack of currently executing testsets, inherited from parent tasks
+        get(task_local_storage(), :__BASETESTNEXT__) do
+            # _Copy_ the array from parent Tasks, to _fork_ the array in child tasks.
+            testsets = copy(get(@task_heritable_storage(), :__BASETESTNEXT__, AbstractTestSet[]))
+            # Write over the testsets array in THS with our copy, so child tasks will inherit our fork.
+            @task_heritable_storage()[:__BASETESTNEXT__] = testsets
+            testsets
+        end
     end
 
     function get_testset()
