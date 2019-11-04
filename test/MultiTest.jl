@@ -1,10 +1,17 @@
-include("../src/TaskHeritableStorage.jl")
+module MultiTestRuntests #end
+
+using TaskHeritableStorage
 
 # Test the behavior in MultiTest.jl to override Test.@testset to track nested parallel tests
 # NOTE: This overrides the behavior of Test functions
-include("../src/MultiTest.jl")
+include("../examples/MultiTest.jl")
 
-using Test
+#using Test
+using Testy.JuliaTestModified
+
+@testset "" begin
+    @test true
+end
 
 # Test that the now-fixed Test.TestSets do correctly embed their nested testsets
 begin
@@ -23,5 +30,33 @@ begin
         end
     end
 
+    @show t.results
     @test length(t.results) == 2
 end
+
+if VERSION >= v"1.3-"
+
+    @testset "outerest" begin
+      @testset "outerer" for _ in 1:10
+        t = @testset "outer" begin
+            @sync begin
+                Threads.@spawn begin
+                    @testset "inner" begin
+                        @test true
+                    end
+                end
+                Threads.@spawn begin
+                    @testset "inner2" begin
+                        @test true
+                    end
+                end
+            end
+        end
+
+        @test length(t.results) == 2
+      end
+    end
+
+end  # if julia 1.3
+
+end # module

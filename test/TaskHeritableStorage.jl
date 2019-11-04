@@ -2,7 +2,7 @@ module TaskHeritableStorageTests #end
 
 using Test
 
-using ..TaskHeritableStorage
+using TaskHeritableStorage
 
 # Examples
 fetch(@async begin  # Put each test in its own Task so they don't share a task_heritable_storage
@@ -18,6 +18,19 @@ fetch(@async begin
     @test TaskHeritableStorage._has_task_heritable_storage(@__MODULE__) == true
     @test fetch(@async TaskHeritableStorage._has_task_heritable_storage(@__MODULE__)) == true
 end)
+
+@testset "assigning doesn't affect parent tasks" begin
+    @task_heritable_storage()[:a] = 1
+    @sync @async begin
+        @test @task_heritable_storage()[:a] == 1
+
+        # Update it to 2 within this Task
+        @task_heritable_storage()[:a] = 2
+        @test @task_heritable_storage()[:a] == 2
+    end
+    # In the parent task, the value is still 1
+    @test @task_heritable_storage()[:a] == 1
+end
 
 @testset "callbacks" begin
     # Dummy function that "uses concurrency" when sorting
