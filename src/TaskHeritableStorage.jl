@@ -39,7 +39,11 @@ function _has_task_heritable_storage(m::Module)
 end
 
 function _clone_task_heritable_storage(dict)
-    task_local_storage()[_heritable_storage_name] = copy(dict)
+    # Copy each module's IdDict, to provide the shallow-copy guaranteed by the spec.
+    task_local_storage()[_heritable_storage_name] = IdDict(
+        m => copy(d)
+        for (m, d) in dict
+    )
 end
 
 # DANGEROUS: Override the Core Task() constructor to copy the task heritable storage
