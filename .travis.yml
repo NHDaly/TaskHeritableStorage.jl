@@ -4,12 +4,22 @@ os:
   - linux
   - osx
 julia:
-  - 1.0
+  - 1.2
+  - 1.3
   - nightly
+env:
+  - JULIA_NUM_THREADS=1
+  - JULIA_NUM_THREADS=2
+jobs:
+  exclude:
+  - julia: 1.2
+    env: JULIA_NUM_THREADS=2
+
 matrix:
   allow_failures:
     - julia: nightly
   fast_finish: true
+
 notifications:
   email: false
 after_success:

@@ -6,8 +6,8 @@ using TaskHeritableStorage
 # NOTE: This overrides the behavior of Test functions
 include("../examples/MultiTest.jl")
 
-#using Test
-using Testy.JuliaTestModified
+using Test
+#using Testy.JuliaTestModified
 
 @testset "" begin
     @test true
@@ -18,7 +18,7 @@ begin
     t = @testset "outer" begin
         @sync begin
             @async begin
-                @testset "inner" begin
+                @testset "inner1" begin
                     @test true
                 end
             end
@@ -34,10 +34,12 @@ begin
     @test length(t.results) == 2
 end
 
-if VERSION >= v"1.3-"
+@static if VERSION >= v"1.3-"
+    @show Threads.nthreads()
 
+    # Test that Testsets now work correctly across multiple threads
     @testset "outerest" begin
-      @testset "outerer" for _ in 1:10
+      @testset "outerer$i" for i in 1:3
         t = @testset "outer" begin
             @sync begin
                 Threads.@spawn begin
