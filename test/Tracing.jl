@@ -3,6 +3,12 @@ module TracingTests #end
 include("../examples/Tracing.jl")
 using .Tracing
 
+@static if VERSION >= v"1.3-"
+    import Base.Threads: @spawn
+else
+    macro spawn(e) esc(:(@async(e))) end
+end
+
 begin
     trace()
     tasks, funcs = get_traces()
@@ -13,12 +19,12 @@ end
 begin
     clear_traces()
     trace()
-    Threads.@spawn begin
+    @spawn begin
         trace()
-        Threads.@spawn begin
+        @spawn begin
             trace()
         end
-        Threads.@spawn begin
+        @spawn begin
             trace()
         end
     end
