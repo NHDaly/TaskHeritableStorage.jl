@@ -23,7 +23,6 @@ import Test
             testsets = copy(get(@task_heritable_storage(), :__NHD_BASETESTNEXT__, AbstractTestSet[]))
             # Write over the testsets array in THS with our copy, so child tasks will inherit our fork.
             @task_heritable_storage()[:__NHD_BASETESTNEXT__] = testsets
-            @show testsets
             testsets
         end
     end
