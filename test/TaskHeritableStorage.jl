@@ -20,16 +20,20 @@ fetch(@async begin
 end)
 
 @testset "assigning doesn't affect parent tasks" begin
-    @task_heritable_storage()[:a] = 1
     @sync @async begin
-        @test @task_heritable_storage()[:a] == 1
+        @task_heritable_storage()[:a] = 1
+        @sync @async begin
+            @test @task_heritable_storage()[:a] == 1
 
-        # Update it to 2 within this Task
-        @task_heritable_storage()[:a] = 2
-        @test @task_heritable_storage()[:a] == 2
+            # Update it to 2 within this Task
+            @task_heritable_storage()[:a] = 2
+            @test @task_heritable_storage()[:a] == 2
+        end
+        # In the parent task, the value is still 1
+        @test @task_heritable_storage()[:a] == 1
     end
-    # In the parent task, the value is still 1
-    @test @task_heritable_storage()[:a] == 1
+    # In the outermost task, the value was never set
+    @test !haskey(@task_heritable_storage(), :a)
 end
 
 @testset "callbacks" begin

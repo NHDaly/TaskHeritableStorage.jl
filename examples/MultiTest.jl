@@ -17,11 +17,13 @@ import Test
 
     function get_current_testsets()
         # Get the stack of currently executing testsets, inherited from parent tasks
-        get(task_local_storage(), :__BASETESTNEXT__) do
+        # NOTE: Use a new key, in case anything was set with the old key before evaling this
+        get!(task_local_storage(), :__NHD_BASETESTNEXT__) do
             # _Copy_ the array from parent Tasks, to _fork_ the array in child tasks.
-            testsets = copy(get(@task_heritable_storage(), :__BASETESTNEXT__, AbstractTestSet[]))
+            testsets = copy(get(@task_heritable_storage(), :__NHD_BASETESTNEXT__, AbstractTestSet[]))
             # Write over the testsets array in THS with our copy, so child tasks will inherit our fork.
-            @task_heritable_storage()[:__BASETESTNEXT__] = testsets
+            @task_heritable_storage()[:__NHD_BASETESTNEXT__] = testsets
+            @show testsets
             testsets
         end
     end

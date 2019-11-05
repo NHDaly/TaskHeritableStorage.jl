@@ -18,7 +18,7 @@ begin
     t = @testset "outer" begin
         @sync begin
             @async begin
-                @testset "inner" begin
+                @testset "inner1" begin
                     @test true
                 end
             end
@@ -39,7 +39,7 @@ if VERSION >= v"1.3-"
 
     # Test that Testsets now work correctly across multiple threads
     @testset "outerest" begin
-      @testset "outerer" for _ in 1:100
+      @testset "outerer$i" for i in 1:3
         t = @testset "outer" begin
             @sync begin
                 Threads.@spawn begin
