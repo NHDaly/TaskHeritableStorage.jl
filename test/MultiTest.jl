@@ -34,7 +34,7 @@ begin
     @test length(t.results) == 2
 end
 
-if VERSION >= v"1.3-"
+@static if VERSION >= v"1.3-"
     @show Threads.nthreads()
 
     # Test that Testsets now work correctly across multiple threads

@@ -51,10 +51,14 @@ end
         @test sort(1:10, lt=less_than) == 1:10
 
         # SURPRISE: the author of sort decides to parallelize it (represented via `psort`)!
-        @test_throws TaskFailedException psort(1:10, lt=less_than) == 1:10
+        @test_throws Exception psort(1:10, lt=less_than) == 1:10
         # The error is a KeyError, because :reverse is no longer in the task_local_storage:
         e = try                          psort(1:10, lt=less_than) == 1:10; catch e; e end
-        @test e.task.exception == KeyError(:reverse)
+        @static if VERSION >= v"1.3-"
+            @test e.task.exception == KeyError(:reverse)
+        else
+            @test e == KeyError(:reverse)
+        end  # VERSION
     end
 
     @testset "SOLUTION: task_heritable_storage is composable" begin
