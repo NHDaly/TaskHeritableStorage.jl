@@ -9,29 +9,24 @@ else
     macro spawn(e) esc(:(@async(e))) end
 end
 
-begin
-    trace()
-    tasks, funcs = get_traces()
-    @info tasks
-    @info funcs
-end
+using Test
 
-begin
-    clear_traces()
-    trace()
-    @spawn begin
-        trace()
-        @spawn begin
-            trace()
-        end
-        @spawn begin
-            trace()
+@testset "Tracing example" begin
+
+    edges = tracetasks() do
+        @sync begin
+            @async begin
+                # Embedded trace within the parent trace
+                inneredges = @tracetasks 2+2
+                @assert length(inneredges) == 1
+            end
+            Threads.@spawn begin
+            end
         end
     end
 
-    tasks, funcs = get_traces()
-    @info tasks
-    @info funcs
-end
+    @test length(edges) == 3
 
 end
+
+end  # module
