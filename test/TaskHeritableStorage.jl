@@ -5,33 +5,35 @@ using Test
 using TaskHeritableStorage
 
 # Examples
-struct ShallowCopyKey{sym} end
-TaskHeritableStorage.fork_task_local_storage(k::ShallowCopyKey, v) = (k,v)
-
-const key = ShallowCopyKey{:tls}()
-
 fetch(@async begin  # Put each test in its own Task so they don't share a task_heritable_storage
-    task_local_storage()[key] = 5
+    @task_heritable_storage()[:current_testset] = 5
     fetch(@async begin
-        @test task_local_storage()[key] == 5
+        @test @task_heritable_storage()[:current_testset] == 5
     end)
+end)
+
+fetch(@async begin
+    @test TaskHeritableStorage._has_task_heritable_storage(@__MODULE__) == false
+    @task_heritable_storage()[:x] = 1
+    @test TaskHeritableStorage._has_task_heritable_storage(@__MODULE__) == true
+    @test fetch(@async TaskHeritableStorage._has_task_heritable_storage(@__MODULE__)) == true
 end)
 
 @testset "assigning doesn't affect parent tasks" begin
     @sync @async begin
-        task_local_storage()[key] = 1
+        @task_heritable_storage()[:a] = 1
         @sync @async begin
-            @test task_local_storage()[key] == 1
+            @test @task_heritable_storage()[:a] == 1
 
             # Update it to 2 within this Task
-            task_local_storage()[key] = 2
-            @test task_local_storage()[key] == 2
+            @task_heritable_storage()[:a] = 2
+            @test @task_heritable_storage()[:a] == 2
         end
         # In the parent task, the value is still 1
-        @test task_local_storage()[key] == 1
+        @test @task_heritable_storage()[:a] == 1
     end
     # In the outermost task, the value was never set
-    @test !haskey(task_local_storage(), key)
+    @test !haskey(@task_heritable_storage(), :a)
 end
 
 @testset "callbacks" begin
@@ -40,7 +42,7 @@ end
         fetch(@async sort(args...; kwargs...))
     end
 
-    @testset "PROBLEM: normal task_local_storage isn't composable" begin
+    @testset "PROBLEM: task_local_storage isn't composable" begin
         task_local_storage()[:reverse] = false
         reversed() = task_local_storage()[:reverse]
 
@@ -59,11 +61,9 @@ end
         end  # VERSION
     end
 
-    @testset "SOLUTION: Using a `fork_task_local_storage()` override _is_ composable" begin
-        reversekey = ShallowCopyKey{:reverse}()
-
-        task_local_storage()[reversekey] = false
-        reversed() = task_local_storage()[reversekey]
+    @testset "SOLUTION: task_heritable_storage is composable" begin
+        @task_heritable_storage()[:reverse] = false
+        reversed() = @task_heritable_storage()[:reverse]
 
         less_than = (a,b) -> reversed() ? a>b : a<b
         @test sort(1:10, lt=less_than) == 1:10
@@ -74,15 +74,15 @@ end
 end
 
 @testset "functional interface" begin
-    @test haskey(task_local_storage(), key) == false
-    task_local_storage(key, 1) do
+    @test haskey(@task_heritable_storage(), :x) == false
+    @task_heritable_storage(:x, 1) do
         # Same Task
-        @test task_local_storage()[key] == 1
+        @test @task_heritable_storage()[:x] == 1
         # Nested Task
-        @test fetch(@async task_local_storage()[key]) == 1
+        @test fetch(@async @task_heritable_storage()[:x]) == 1
     end
     # Storage removed after the function returns
-    @test haskey(task_local_storage(), key) == false
+    @test haskey(@task_heritable_storage(), :x) == false
 end
 
 end

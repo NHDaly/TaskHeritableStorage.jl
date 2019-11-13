@@ -36,7 +36,6 @@ Base.push!(a::Accumulator, v...) = (push!(a.nvectors[Threads.threadid()], v...);
 
 # Construct from existing collections
 Base.convert(t::Type{Accumulator}, collection) = t(collection)
-Base.convert(t::Type{<:Accumulator}, x::Accumulator{S}) where {S} = t(collect(x))
 Accumulator(collection) = Accumulator{eltype(collection)}(collection)
 function Accumulator{T}(collection) where T
     a = Accumulator{T}()

@@ -15,16 +15,16 @@ import Test
     # DefaultTestSet is written to in parallel. The next block of code, below, addresses
     # that by adding a lock around setters. A nicer fix would be to use a lock-free accumulator.
 
-    # Key for Task Local Storage
-    struct TestSetStackKey end
-
-    # Fork the stack of testsets when new tasks are spawned, so that child tasks don't
-    # clobber eachother's stacks.
-    TaskHeritableStorage.fork_task_local_storage(k::TestSetStackKey, v) = (k, copy(v))
-
-    # Get the stack of currently executing testsets, inherited from parent tasks
     function get_current_testsets()
-        get!(task_local_storage(), TestSetStackKey(), AbstractTestSet[])
+        # Get the stack of currently executing testsets, inherited from parent tasks
+        # NOTE: Use a new key, in case anything was set with the old key before evaling this
+        get!(task_local_storage(), :__NHD_BASETESTNEXT__) do
+            # _Copy_ the array from parent Tasks, to _fork_ the array in child tasks.
+            testsets = copy(get(@task_heritable_storage(), :__NHD_BASETESTNEXT__, AbstractTestSet[]))
+            # Write over the testsets array in THS with our copy, so child tasks will inherit our fork.
+            @task_heritable_storage()[:__NHD_BASETESTNEXT__] = testsets
+            testsets
+        end
     end
 
     function get_testset()
