@@ -1,33 +1,58 @@
 module Tracing #end
 
-export clear_traces, trace, get_traces
+export tracetasks, @tracetasks
 
 using TaskHeritableStorage
 
 include("ThreadSafeAccumulators.jl")
 using .ThreadSafeAccumulators
 
-function clear_traces()
-    global task_traces = Accumulator()
-    global func_traces = Accumulator()
+# Key for Task Local Storage
+struct TraceTLSKey
+    id::Int  # Use a unique TLS key for each trace to allow composable tracing
+    TraceTLSKey() = new(traceid[] += 1)
 end
-clear_traces()
+traceid = Threads.Atomic{Int}(0)
+struct TraceTLSValue
+    task_edges::Accumulator{Pair{Task,Task}}
+    parent_task::Task  # Set to current_task()
+    TraceTLSValue() = new(Accumulator([(current_task() => current_task())]), current_task())
+    TraceTLSValue(edges, task) = new(edges, task)
+end
 
-function trace()
-    ths = @task_heritable_storage()
-    # If this is the first time tracing this Task, update the current task
-    get!(task_local_storage(), (@__MODULE__, :task_is_traced)) do
-        parent = get!(ths, :current_task, nothing)
-        current = ths[:current_task] = current_task()
-        push!(task_traces, (parent, current))
-        true
+function TaskHeritableStorage.fork_task_local_storage(k, v::TraceTLSValue)
+    # It is thread-safe to push! to an Accumulator
+    push!(v.task_edges, v.parent_task => current_task())
+    # Fork a new "current task", but share the same edges accumulator:
+    (k, TraceTLSValue(v.task_edges, current_task()))
+end
+
+
+"""
+    @tracetasks expr
+
+Equivalent to tracetasks() do ; expr; end
+"""
+macro tracetasks(e)
+    :(tracetasks(()->$(esc(e))))
+end
+
+"""
+    @tracetasks expr
+    tracetasks() do ; end
+    tracetasks(f::Function)
+
+Run a function and trace all tasks that are spawned during its execution.
+Returns an Array of pairs from `parent_task => child_task`. The root task is represented
+with a special self-edge `t => t`.
+"""
+function tracetasks(f::Function)
+    tls = task_local_storage()
+    key = TraceTLSKey()
+    task_local_storage(key, TraceTLSValue()) do
+        f()
+        return collect(task_local_storage()[key].task_edges)
     end
-
-    push!(func_traces, (ths[:current_task], Base.stacktrace()))
 end
 
-function get_traces()
-    collect(task_traces), collect(func_traces)
-end
-
-end
+end  # module

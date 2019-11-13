@@ -1,49 +1,37 @@
 module TaskHeritableStorage # end
 
-export task_heritable_storage, @task_heritable_storage
-
-const _heritable_storage_name = Symbol("##__nhdaly-task_heritable_storage__##")
-
 """
-    task_heritable_storage(m::Module) :: IdDict
-    @task_heritable_storage() :: IdDict
+    fork_task_local_storage(key, value) -> (key,value) or nothing
 
-Return the current task's task-heritable storage dictionary. Note that storage in this
-dictionary is copied to all tasks spawned from this task, so it is safe to rely on this
-storage being available from any subsequent accesses within this Task or nestsed Tasks.
+Whenever a new `Task` is created, all `(key,value)` pairs in the parent Task's
+`task_local_storage` are passed to this function, which gives a chance to _fork_ those pairs
+into the new child `Task`'s task local storage.
 
-NOTE: Since this storage could be accessed from nested Tasks, accessing or modifying mutable
-_values_ is not thread-safe, and must be treated like any global mutable state (e.g. locked
-via a mutex).
+Whatever new `(key, value)` pair is returned will be inserted into the new Task's
+`task_local_storage`. If `nothing` is returned, the child Task's storage will not be
+modified. This is the default behavior.
 
-Storage is namespaced per-module, so you do not need to worry about your variable names
-colliding with other modules.
+This function is called from inside the newly created `Task` before anything else happens,
+so within this function `current_task()` will return the new Task.
 """
-function task_heritable_storage(m::Module)
-    get!(_task_heritable_storage_all_modules(), m, IdDict{Any,Any}())
+function fork_task_local_storage(key, value)
+    nothing
 end
-_task_heritable_storage_all_modules() = get!(task_local_storage(), _heritable_storage_name, IdDict{Module,Any}())
 
-# Note that overloaded macros can only be documented once, the documentation is provided at
-# the bottom of this file.
-macro task_heritable_storage()
-    :(task_heritable_storage($__module__))  # No esc needed, since no user inputs
-end
 
 # ----------------------
 # Replace the definition of Core._Task() to clone task_heritable_storage on construction.
 
-function _has_task_heritable_storage(m::Module)
-    haskey(task_local_storage(), _heritable_storage_name) &&
-        haskey(_task_heritable_storage_all_modules(), m)
-end
-
-function _clone_task_heritable_storage(dict)
-    # Copy each module's IdDict, to provide the shallow-copy guaranteed by the spec.
-    task_local_storage()[_heritable_storage_name] = IdDict(
-        m => copy(d)
-        for (m, d) in dict
-    )
+function _fork_task_local_storage_from_parent(parent_tls)
+    tls = task_local_storage()
+    # Fork all (k,v) pairs from the parent's TLS into this task's TLS
+    for (k, v) in parent_tls
+        out = fork_task_local_storage(k,v)
+        if out !== nothing
+            (newkey, newval) = out
+            tls[newkey] = newval
+        end
+    end
 end
 
 # DANGEROUS: Override the Core Task() constructor to copy the task heritable storage
@@ -53,10 +41,10 @@ function __Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
 end
 function Core._Task(@nospecialize(f), reserved_stack::Int, completion_future)
-    if haskey(task_local_storage(), _heritable_storage_name)
-        let all_storage = _task_heritable_storage_all_modules()
+    if current_task().storage !== nothing
+        let parent_tls = task_local_storage()
             wrapped = () -> begin
-                _clone_task_heritable_storage(all_storage);
+                _fork_task_local_storage_from_parent(parent_tls);
                 f();
             end
             return __Task(wrapped, reserved_stack, completion_future)
@@ -64,44 +52,6 @@ function Core._Task(@nospecialize(f), reserved_stack::Int, completion_future)
     else
         return __Task(f, reserved_stack, completion_future)
     end
-end
-
-
-# -------- Convenience APIs ----------------
-"""
-    task_heritable_storage(m::Module, key, value) do ... end
-    @task_heritable_storage(key, value) do ... end
-
-Call the function `body` with a modified task-heritable storage, in which `value` is assigned to
-`key`; the previous value of `key`, or lack thereof, is restored afterwards.
-"""
-function task_heritable_storage(body::Function, m::Module, key, val)
-    tls = task_heritable_storage(m)
-    hadkey = haskey(tls, key)
-    old = get(tls, key, nothing)
-    tls[key] = val
-    try
-        return body()
-    finally
-        hadkey ? (tls[key] = old) : delete!(tls, key)
-    end
-end
-
-# Note that overloaded macros can only be documented once, so this documents both macros
-"""
-    @task_heritable_storage()  :: IdDict
-
-This is simply a synonym for [`task_heritable_storage(@__MODULE__)`](@ref).
-
-───────────────────────────────────────────────────────────────────────────
-
-    @task_heritable_storage(key, value) do ... end
-
-This is simply a synonym for `task_heritable_storage(@__MODULE__, key, value) do ... end`
-"""
-macro task_heritable_storage(body, key, value)
-    # @task_heritable_storage(key, value) do ... end
-    esc(:($task_heritable_storage($body, $__module__, $key, $value)))
 end
 
 
